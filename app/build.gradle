@@ -9,10 +9,10 @@ android {
 
     defaultConfig {
         applicationId "com.booster.dwr921"
-        minSdk 21
-        targetSdk 34
+        minSdk 24
+        targetSdk 33 // مخصص ومتوافق 100% مع أندرويد 13
         versionCode 1
-        versionName "1.0"
+        versionName "1.0-Modern"
     }
 
     buildTypes {
