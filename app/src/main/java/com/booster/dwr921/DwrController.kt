@@ -3,7 +3,6 @@ package com.booster.dwr921
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.*
-import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.TimeUnit
@@ -19,9 +18,9 @@ class DwrController(
         .readTimeout(3, TimeUnit.SECONDS)
         .build()
 
-    // 1. إجبار المودم على حظر 3G والتقاط أضعف إشارة 4G (B28 700MHz + B3 1800MHz)
+    // 1. إجبار المودم على حظر 3G والتشبث بترددات 4G (Band 28 و Band 3)
     suspend fun force4GLteOnly(): Boolean = withContext(Dispatchers.IO) {
-        logger("[HUNTER] جاري إجبار المودم على حظر 3G والبحث العنيف عن 4G...")
+        logger("[HUNTER] إرسال أوامر حظر 3G والتشبث بـ LTE 4G...")
         val body = FormBody.Builder()
             .add("wan_mode", "4G_ONLY")
             .add("net_mode", "LTE_ONLY")
@@ -64,9 +63,9 @@ class DwrController(
         }
     }
 
-    // 2. إعادة تشغيل جلسة البيانات فوراً (حل مشكلة انقطاع النت التلقائي دون لمس الراوتر)
+    // 2. إعادة إحياء جلسة البيانات فور حدوث التجميد (حل مشكلة انقطاع النت التلقائي)
     suspend fun reviveConnection(): Boolean = withContext(Dispatchers.IO) {
-        logger("[AUTO-HEAL] رصد انقطاع بالنت! جاري إعادة إنعاش الجلسة للراوتر فوراً...")
+        logger("[AUTO-HEAL] رصد انقطاع بالنت! جاري إعادة إحياء الجلسة للراوتر فوراً...")
         val body = FormBody.Builder()
             .add("action", "reconnect")
             .add("wan_action", "restart")
@@ -103,7 +102,7 @@ class DwrController(
         }
     }
 
-    // 3. فحص هل الإنترنت شغال حقيقة أم مجمد (Ping Watchdog)
+    // 3. فحص حي للإنترنت عبر مقابس سريعة
     suspend fun isInternetAlive(): Boolean = withContext(Dispatchers.IO) {
         return@withContext try {
             val socket = Socket()
@@ -122,7 +121,7 @@ class DwrController(
         }
     }
 
-    // 4. تثبيت تردد 2100MHz ومنع ذبذبته عبر إبقائه في أعلى قدرة بث Cell_DCH
+    // 4. تثبيت تردد 2100MHz ومنع ذبذبته
     suspend fun pumpActiveChannel(): Boolean = withContext(Dispatchers.IO) {
         return@withContext try {
             val s = Socket()
