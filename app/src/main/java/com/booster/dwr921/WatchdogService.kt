@@ -21,7 +21,7 @@ class WatchdogService : Service() {
         val ip = intent?.getStringExtra("ROUTER_IP") ?: "192.168.0.1"
         val pass = intent?.getStringExtra("ROUTER_PASS") ?: ""
 
-        controller = DwrController(ip, pass) { /* logs handled via broadcast */ }
+        controller = DwrController(ip, pass) { }
 
         createNotification()
         startWatchdogLoop()
@@ -45,6 +45,7 @@ class WatchdogService : Service() {
             .setContentTitle("🛡️ حارس اتصال DWR-921 قيد العمل")
             .setContentText("يراقب الاتصال باستمرار، ويمنع انقطاع النت وتذبذب التردد...")
             .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setOngoing(true)
             .build()
 
         startForeground(101, notification)
@@ -56,32 +57,32 @@ class WatchdogService : Service() {
 
         serviceScope.launch {
             while (isActive && isRunning) {
-                // 1. إرسال نبضة منع ذبذبة وتثبيت التردد (Cell_DCH Lock)
+                // منع التنويم وتثبيت التردد
                 controller.pumpActiveChannel()
 
-                // 2. فحص هل الإنترنت شغال حقيقة؟
+                // فحص صحة الإنترنت
                 val alive = controller.isInternetAlive()
 
                 if (!alive) {
                     failCount++
-                    // لو فشل النت لمرتين متتاليتين (انقطع النت المفاجئ)
                     if (failCount >= 2) {
-                        broadcastLog("⚠️ انقطع النت فجأة! جاري إيقاظ الراوتر وإعادة ربط الشبكة تلقائياً...")
+                        broadcastLog("⚠️ انقطع النت فجأة! جاري إنعاش الراوتر وإعادة ربط الشبكة تلقائياً...")
                         controller.reviveConnection()
-                        delay(6000) // إعطاء الراوتر مهلة لتجديد الـ IP
+                        delay(6000)
                         failCount = 0
                     }
                 } else {
                     failCount = 0
                 }
 
-                delay(2000) // فحص دوري كل ثانيتين
+                delay(2000)
             }
         }
     }
 
     private fun broadcastLog(msg: String) {
         val intent = Intent("DWR_LOG_EVENT")
+        intent.setPackage(packageName)
         intent.putExtra("LOG_TEXT", msg)
         sendBroadcast(intent)
     }
