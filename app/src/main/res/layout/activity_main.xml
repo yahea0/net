@@ -2,7 +2,7 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0D1117"
+    android:background="#0A0E17"
     android:padding="16dp">
 
     <LinearLayout
@@ -13,16 +13,16 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="🛡️ DWR-921 Auto-Heal & 4G Hunter"
+            android:text="🛡️ DWR-921 Modern Turbo"
             android:textColor="#58A6FF"
-            android:textSize="20sp"
+            android:textSize="22sp"
             android:textStyle="bold" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="حل مشكلة انقطاع النت التلقائي + قفل 4G وتثبيت 3G"
+            android:text="أندرويد 13 | إنعاش تلقائي للنت + صيد 4G وتثبيت 3G"
             android:textColor="#8B949E"
             android:textSize="13sp" />
 
@@ -42,49 +42,46 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:background="#161B22"
-            android:hint="كلمة سر لوحة تحكم الراوتر"
+            android:hint="كلمة مرور لوحة تحكم الراوتر"
             android:inputType="textPassword"
             android:padding="12dp"
             android:textColor="#FFFFFF"
             android:textColorHint="#484F58" />
 
-        <!-- زر صيد وإجبار 4G -->
         <Button
             android:id="@+id/btnForce4G"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:backgroundTint="#238636"
-            android:text="📡 إجبار وصيد إشارة 4G LTE (حظر 3G كلياً)"
+            android:text="📡 قفل وصيد إشارة 4G LTE بالقوة"
             android:textColor="#FFFFFF"
             android:textStyle="bold" />
 
-        <!-- زر حارس الشبكة لمنع انقطاع النت وتثبيت 3G -->
         <Button
             android:id="@+id/btnStartWatchdog"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:backgroundTint="#1F6FEB"
-            android:text="⚡ تشغيل حارس النت التلقائي ومثبت الإشارة"
+            android:text="⚡ تشغيل حارس النت الذكي (منع الانقطاع)"
             android:textColor="#FFFFFF"
             android:textStyle="bold" />
 
-        <!-- زر إعادة إنعاش يدوي فوري -->
         <Button
             android:id="@+id/btnManualRevive"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:backgroundTint="#8957E5"
-            android:text="🔄 إنعاش الاتصال الآن (Revive Session)"
+            android:text="🔄 إنعاش فوري يدوي لجلسة البيانات"
             android:textColor="#FFFFFF" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="السجل الحي لحالة الراوتر والإنترنت:"
+            android:text="شاشة المراقبة اللحظية (Console):"
             android:textColor="#C9D1D9"
             android:textSize="13sp" />
 
@@ -97,7 +94,7 @@
             android:fontFamily="monospace"
             android:padding="10dp"
             android:scrollbars="vertical"
-            android:text="[READY] التطبيق بانتظار أوامرك لحل المشاكل...\n"
+            android:text="[INIT] تم تهيئة النظام للعمل مع راوتر DWR-921 على أندرويد 13...\n"
             android:textColor="#39D353"
             android:textSize="12sp" />
 
