@@ -1,15 +1,19 @@
 package com.booster.dwr921
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
@@ -23,6 +27,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnManualRevive: Button
 
     private var isWatchdogActive = false
+
+    // طلب إذن الإشعارات الخاص بأندرويد 13 (API 33)
+    private val requestNotificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                log("[ANDROID 13] تم منح إذن الإشعارات بنجاح للخدمة الخلفية.")
+            } else {
+                log("[WARN] لم يتم منح الإذن، يرجى تفعيله لضمان عمل الحارس في الخلفية.")
+            }
+        }
 
     private val logReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -44,13 +58,16 @@ class MainActivity : AppCompatActivity() {
         btnStartWatchdog = findViewById(R.id.btnStartWatchdog)
         btnManualRevive = findViewById(R.id.btnManualRevive)
 
+        checkAndroid13Permissions()
+
+        // تسجيل المستقبل بنظام أندرويد 13 الآمن
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(logReceiver, IntentFilter("DWR_LOG_EVENT"), RECEIVER_NOT_EXPORTED)
         } else {
             registerReceiver(logReceiver, IntentFilter("DWR_LOG_EVENT"))
         }
 
-        // 1. زر إجبار وقنص 4G
+        // زر قفل فور جي
         btnForce4G.setOnClickListener {
             val controller = getController()
             lifecycleScope.launch {
@@ -64,7 +81,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 2. زر تشغيل حارس الشبكة لمنع انقطاع النت وتثبيت الإشارة
+        // زر تشغيل الحارس التلقائي
         btnStartWatchdog.setOnClickListener {
             val serviceIntent = Intent(this, WatchdogService::class.java).apply {
                 putExtra("ROUTER_IP", etRouterIp.text.toString().trim())
@@ -78,25 +95,34 @@ class MainActivity : AppCompatActivity() {
                     startService(serviceIntent)
                 }
                 isWatchdogActive = true
-                btnStartWatchdog.text = "⏹ إيقاف حارس الشبكة ومثبت الإشارة"
+                btnStartWatchdog.text = "⏹ إيقاف حارس النت ومثبت الإشارة"
                 btnStartWatchdog.setBackgroundColor(0xFFDA3633.toInt())
-                log("🚀 تم تشغيل الحارس التلقائي: لن تحتاج لإعادة تشغيل الراوتر بعد الآن إذا فصل النت!")
+                log("🚀 تم تشغيل الحارس التلقائي بنجاح على أندرويد 13!")
             } else {
                 stopService(serviceIntent)
                 isWatchdogActive = false
-                btnStartWatchdog.text = "⚡ تشغيل حارس النت التلقائي ومثبت الإشارة"
+                btnStartWatchdog.text = "⚡ تشغيل حارس النت الذكي (منع الانقطاع)"
                 btnStartWatchdog.setBackgroundColor(0xFF1F6FEB.toInt())
                 log("⏹ تم إيقاف الحارس.")
             }
         }
 
-        // 3. زر إنعاش فوري يدوي
+        // زر الإنعاش الفوري اليدوي
         btnManualRevive.setOnClickListener {
             val controller = getController()
             lifecycleScope.launch {
                 log("[REVIVE] جاري إعادة إنعاش جلسة البيانات فوراً...")
                 val res = controller.reviveConnection()
                 log(if (res) "✅ تم إحياء الاتصال بنجاح!" else "ℹ️ جاري معالجة الجلسة...")
+            }
+        }
+    }
+
+    private fun checkAndroid13Permissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
     }
