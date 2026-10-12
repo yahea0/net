@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_main">#0D1117</color>
+    <color name="card_bg">#161B22</color>
+    <color name="card_stroke">#30363D</color>
+    <color name="input_bg">#21262D</color>
+    <color name="text_white">#F0F6FC</color>
+    <color name="text_muted">#8B949E</color>
+    <color name="green_accent">#238636</color>
+    <color name="blue_accent">#1F6FEB</color>
+    <color name="purple_accent">#8957E5</color>
+    <color name="amber_accent">#D29922</color>
+    <color name="red_accent">#DA3633</color>
+    <color name="console_bg">#010409</color>
+    <color name="console_text">#39D353</color>
+</resources>
