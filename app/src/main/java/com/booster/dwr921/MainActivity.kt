@@ -26,10 +26,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etRouterIp: EditText
     private lateinit var etPassword: EditText
     private lateinit var tvConsole: TextView
+    private lateinit var tvLivePingBadge: TextView
+    private lateinit var tvClearLogs: TextView
+
     private lateinit var btnReconnectWan: Button
     private lateinit var btnStartWatchdog: Button
     private lateinit var btnApplyDnsMtu: Button
-    private lateinit var btnForce4G: Button
+    private lateinit var btnForce3G: Button
+    private lateinit var btnAutoNetwork: Button
     private lateinit var btnDnsBenchmark: Button
     private lateinit var btnCloudServer: Button
 
@@ -43,6 +47,13 @@ class MainActivity : AppCompatActivity() {
     private val logReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             intent?.getStringExtra("LOG_TEXT")?.let { log(it) }
+            intent?.getLongExtra("LIVE_PING", -2L)?.let { ping ->
+                if (ping >= 0) {
+                    tvLivePingBadge.text = "البنج: ${ping}ms"
+                } else if (ping == -1L) {
+                    tvLivePingBadge.text = "منقطع ⚠️"
+                }
+            }
         }
     }
 
@@ -53,10 +64,14 @@ class MainActivity : AppCompatActivity() {
         etRouterIp = findViewById(R.id.etRouterIp)
         etPassword = findViewById(R.id.etPassword)
         tvConsole = findViewById(R.id.tvConsole)
+        tvLivePingBadge = findViewById(R.id.tvLivePingBadge)
+        tvClearLogs = findViewById(R.id.btnClearLogs)
+
         btnReconnectWan = findViewById(R.id.btnReconnectWan)
         btnStartWatchdog = findViewById(R.id.btnStartWatchdog)
         btnApplyDnsMtu = findViewById(R.id.btnApplyDnsMtu)
-        btnForce4G = findViewById(R.id.btnForce4G)
+        btnForce3G = findViewById(R.id.btnForce3G)
+        btnAutoNetwork = findViewById(R.id.btnAutoNetwork)
         btnDnsBenchmark = findViewById(R.id.btnDnsBenchmark)
         btnCloudServer = findViewById(R.id.btnCloudServer)
 
@@ -70,25 +85,29 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(logReceiver, IntentFilter("DWR_LOG_EVENT"))
         }
 
-        log("🚀 مرحباً بك! التطبيق جاهز لإدارة راوتر DWR-921 وشريحة رامي ليفي.")
+        log("🚀 مرحباً بك! تم تهيئة المعمارية خصيصاً لشبكة 3G لشريحة رامي ليفي.")
 
-        // 1. إعادة تشغيل الشبكة فوراً (المحاكي الدقيق لزر RECONNECT في الصورة)
+        tvClearLogs.setOnClickListener {
+            tvConsole.text = ""
+        }
+
+        // 1. إعادة تشغيل الشبكة فوراً (المحاكي الدقيق لزر RECONNECT)
         btnReconnectWan.setOnClickListener {
             val controller = getController()
             lifecycleScope.launch {
-                log("[USER] تم طلب إعادة إنعاش الشبكة (RECONNECT) فوراً...")
+                log("[USER] تم الضغط على زر RECONNECT لإعادة تشغيل جلسة بيانات رامي ليفي...")
                 btnReconnectWan.isEnabled = false
                 val ok = controller.reviveWanSession()
                 if (ok) {
-                    log("✅ نجح إرسال أوامر الإنعاش! ننتظر استلام IP جديد من رامي ليفي...")
+                    log("✅ تم إرسال نبضة الإنعاش! الراوتر يعيد الارتباط ببرج 3G...")
                 } else {
-                    log("⚠️ جاري متابعة استجابة المودم...")
+                    log("⚠️ جاري فحص استجابة الراوتر...")
                 }
                 btnReconnectWan.isEnabled = true
             }
         }
 
-        // 2. تشغيل / إيقاف الحارس الذكي في الخلفية لمنع التقطيع
+        // 2. تشغيل / إيقاف الحارس الذكي في الخلفية
         btnStartWatchdog.setOnClickListener {
             val intent = Intent(this, WatchdogService::class.java).apply {
                 putExtra("ROUTER_IP", etRouterIp.text.toString().trim())
@@ -104,22 +123,44 @@ class MainActivity : AppCompatActivity() {
                 isWatchdogActive = true
                 btnStartWatchdog.text = "⏹ إيقاف حارس النت الذكي"
                 btnStartWatchdog.setBackgroundColor(0xFFDA3633.toInt())
-                log("🛡️ تم تفعيل الحارس: يراقب الإنترنت ويعيد تشغيل اتصال رامي ليفي تلقائياً عند انقطاعه!")
+                log("🛡️ تم تفعيل الحارس: يراقب اتصال 3G ويعيد إنعاشه ذاتياً عند توقف البيانات!")
             } else {
                 stopService(intent)
                 isWatchdogActive = false
-                btnStartWatchdog.text = "🛡️ تشغيل حارس النت الذكي (منع التقطيع)"
+                btnStartWatchdog.text = "🛡️ تشغيل حارس رامي ليفي (منع الانقطاع التلقائي)"
                 btnStartWatchdog.setBackgroundColor(0xFF1F6FEB.toInt())
                 log("⏹ تم إيقاف الحارس.")
             }
         }
 
-        // 3. حقن MTU 1380 + أسرع DNS في الراوتر
+        // 3. قفل الراوتر حصرياً على 3G فقط
+        btnForce3G.setOnClickListener {
+            val controller = getController()
+            lifecycleScope.launch {
+                btnForce3G.isEnabled = false
+                val ok = controller.force3GOnly()
+                if (ok) {
+                    log("🔒 تم قفل الراوتر على 3G HSPA+ بنجاح! تم التخلص من تذبذب الإشارة.")
+                }
+                btnForce3G.isEnabled = true
+            }
+        }
+
+        // 4. وضع الشبكة التلقائي
+        btnAutoNetwork.setOnClickListener {
+            val controller = getController()
+            lifecycleScope.launch {
+                controller.setAutoNetworkMode()
+                log("🔄 تم ضبط نمط الشبكة على تلقائي.")
+            }
+        }
+
+        // 5. حقن MTU 1380 + أسرع DNS
         btnApplyDnsMtu.setOnClickListener {
             val controller = getController()
             lifecycleScope.launch {
                 btnApplyDnsMtu.isEnabled = false
-                log("[TUNING] فحص الخوادم واختيار الأفضل قبل الحقن...")
+                log("[TUNING] فحص أسرع DNS لموقعك...")
                 val (bestDnsName, ping) = controller.benchmarkDnsServers()
                 log("🏆 الخادم الأسرع: $bestDnsName (${ping}ms)")
 
@@ -129,43 +170,35 @@ class MainActivity : AppCompatActivity() {
                     secondaryDns = "1.0.0.1"
                 )
                 if (ok) {
-                    log("🎉 تم ضبط MTU = 1380 والـ DNS في الراوتر وخادم الـ DHCP الداخلي بنجاح!")
+                    log("🎉 تم تثبيت MTU 1380 وخوادم Cloudflare بنجاح في الراوتر!")
                 }
                 btnApplyDnsMtu.isEnabled = true
             }
         }
 
-        // 4. قفل الراوتر على 4G LTE فقط
-        btnForce4G.setOnClickListener {
-            val controller = getController()
-            lifecycleScope.launch {
-                log("[MODEM] قفل الراوتر على 4G LTE...")
-                val res = controller.force4GLte()
-                log(if (res) "✅ تم إجبار الراوتر على وضع 4G بنجاح!" else "ℹ️ تم تمرير أمر القفل للراوتر.")
-            }
-        }
-
-        // 5. قياس البنج المباشر
+        // 6. قياس سرعة الاستجابة اللحظية (Ping)
         btnDnsBenchmark.setOnClickListener {
             val controller = getController()
             lifecycleScope.launch {
-                log("[PING] جاري قياس سرعة الاستجابة اللحظية...")
+                log("[PING] جاري فحص البنج اللحظي لشبكة رامي ليفي...")
                 val ping = controller.measureInternetPing()
                 if (ping != -1L) {
-                    log("📶 البنج المباشر للإنترنت: ${ping}ms")
+                    tvLivePingBadge.text = "البنج: ${ping}ms"
+                    log("📶 البنج الفعلي للإنترنت: ${ping}ms")
                 } else {
+                    tvLivePingBadge.text = "منقطع ⚠️"
                     log("❌ النت غير مستجيب حالياً (انقطاع في الاتصال).")
                 }
             }
         }
 
-        // 6. نبضات تثبيت الاتصال (Heartbeat) لمنع خمول برج رامي ليفي
+        // 7. نبضات تثبيت البرج (Keep-Alive Anti-Idle)
         btnCloudServer.setOnClickListener {
             if (!isCloudPulseActive) {
                 isCloudPulseActive = true
-                btnCloudServer.text = "⏹ إيقاف نبضات التثبيت"
+                btnCloudServer.text = "⏹ إيقاف النبضات"
                 btnCloudServer.setBackgroundColor(0xFFDA3633.toInt())
-                log("☁️ تم بدء إرسال نبضات التثبيت (Keep-Alive): منع البرج من فصل الجلسة...")
+                log("☁️ تم تشغيل نبضات تثبيت البرج: إبقاء قناة 3G مفتوحة على الدوام لمنع وضع الخمول...")
 
                 val controller = getController()
                 cloudPulseJob = lifecycleScope.launch {
@@ -177,7 +210,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 isCloudPulseActive = false
                 cloudPulseJob?.cancel()
-                btnCloudServer.text = "☁️ نبضات تثبيت الاتصال (Cloud Heartbeat)"
+                btnCloudServer.text = "☁️ تثبيت البرج"
                 btnCloudServer.setBackgroundColor(0xFFD29922.toInt())
                 log("⏹ تم إيقاف نبضات التثبيت.")
             }
