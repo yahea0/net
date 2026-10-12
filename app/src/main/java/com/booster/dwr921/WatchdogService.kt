@@ -70,10 +70,8 @@ class WatchdogService : Service() {
             controller.authenticateAnweb()
 
             while (isActive && isRunning) {
-                // إرسال نبضة منع خمول برج 3G
                 controller.pumpStabilityPulse()
 
-                // قياس البنج الحقيقي
                 val ping = controller.measureInternetPing()
 
                 if (ping != -1L) {
