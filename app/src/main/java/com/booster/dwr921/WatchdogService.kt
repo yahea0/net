@@ -29,7 +29,7 @@ class WatchdogService : Service() {
         controller = DwrController(ip, pass) { msg -> broadcastLog(msg) }
 
         createNotificationChannel()
-        updateNotification("🛡️ الحارس الذكي نشط: يراقب اتصال رامي ليفي...")
+        updateNotification("🛡️ حارس 3G نشط: يراقب اتصال رامي ليفي...")
         startWatchdogEngine()
 
         return START_STICKY
@@ -42,7 +42,7 @@ class WatchdogService : Service() {
                 "حارس اتصال Anweb DWR-921",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "مراقبة وإعادة إنعاش اتصال رامي ليفي تلقائياً"
+                description = "مراقبة وإنعاش اتصال رامي ليفي تلقائياً"
             }
             val manager = getSystemService(NotificationManager::class.java)
             manager?.createNotificationChannel(channel)
@@ -51,7 +51,7 @@ class WatchdogService : Service() {
 
     private fun updateNotification(statusText: String) {
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("🛡️ حارس اتصال رامي ليفي (DWR-921)")
+            .setContentTitle("🛡️ حارس رامي ليفي 3G (DWR-921)")
             .setContentText(statusText)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setOngoing(true)
@@ -66,39 +66,41 @@ class WatchdogService : Service() {
         isRunning = true
 
         serviceScope.launch {
-            broadcastLog("🚀 بدأ تشغيل الحارس التلقائي: فحص كل 3 ثوانٍ ونبضات تثبيت الاتصال مفعلة.")
+            broadcastLog("🚀 بدأ تشغيل الحارس: نبضات تثبيت 3G مفعلة وفحص الاتصال كل 2.5 ثانية.")
             controller.authenticateAnweb()
 
             while (isActive && isRunning) {
-                // إرسال نبضة منع خمول البرج (Anti-Idle Pulse)
+                // إرسال نبضة منع خمول برج 3G
                 controller.pumpStabilityPulse()
 
-                // قياس البنج المباشر
+                // قياس البنج الحقيقي
                 val ping = controller.measureInternetPing()
 
                 if (ping != -1L) {
                     consecutiveFails = 0
-                    updateNotification("🟢 النت متصل ومستقر | البنج: ${ping}ms")
+                    updateNotification("🟢 النت مستقر | البنج: ${ping}ms (3G HSPA+)")
+                    broadcastPing(ping)
                 } else {
                     consecutiveFails++
-                    updateNotification("⚠️ تعثر الاتصال (محاولة $consecutiveFails من 2)...")
-                    broadcastLog("⚠️ رصد بطء أو انقطاع في الاستجابة ($consecutiveFails/2)")
+                    updateNotification("⚠️ تعثر الاستجابة (محاولة $consecutiveFails من 2)...")
+                    broadcastPing(-1L)
+                    broadcastLog("⚠️ تعثر استجابة شبكة 3G ($consecutiveFails/2)")
 
                     if (consecutiveFails >= 2) {
-                        broadcastLog("🚨 تأكد انقطاع النت! جاري تفعيل زر [RECONNECT] في الراوتر لإحياء الجلسة...")
-                        updateNotification("⚡ جاري إعادة تشغيل الشبكة وإنعاش الاتصال...")
+                        broadcastLog("🚨 تأكد انقطاع النت! جاري تفعيل زر RECONNECT لإحياء الجلسة فوراً...")
+                        updateNotification("⚡ جاري إعادة إنعاش الشبكة وطلب IP جديد...")
 
                         val revived = controller.reviveWanSession()
                         if (revived) {
-                            broadcastLog("⏳ تم تمرير الإنعاش، ننتظر 6 ثوانٍ لاستقرار الـ IP الجديد...")
-                            delay(6000)
+                            broadcastLog("⏳ تم الإنعاش، ننتظر 5 ثوانٍ لاستقرار بيانات رامي ليفي...")
+                            delay(5000)
                         } else {
-                            delay(3000)
+                            delay(2500)
                         }
                         consecutiveFails = 0
                     }
                 }
-                delay(3000)
+                delay(2500)
             }
         }
     }
@@ -107,6 +109,14 @@ class WatchdogService : Service() {
         val intent = Intent("DWR_LOG_EVENT").apply {
             setPackage(packageName)
             putExtra("LOG_TEXT", msg)
+        }
+        sendBroadcast(intent)
+    }
+
+    private fun broadcastPing(ping: Long) {
+        val intent = Intent("DWR_LOG_EVENT").apply {
+            setPackage(packageName)
+            putExtra("LIVE_PING", ping)
         }
         sendBroadcast(intent)
     }
