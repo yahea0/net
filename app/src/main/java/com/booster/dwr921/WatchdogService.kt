@@ -19,9 +19,9 @@ class WatchdogService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val ip = intent?.getStringExtra("ROUTER_IP") ?: "192.168.0.1"
-        val pass = intent?.getStringExtra("ROUTER_PASS") ?: ""
+        val pass = intent?.getStringExtra("ROUTER_PASS") ?: "admin01"
 
-        controller = DwrController(ip, pass) { }
+        controller = DwrController(ip, pass) { msg -> broadcastLog(msg) }
 
         createNotification()
         startWatchdogLoop()
@@ -30,11 +30,11 @@ class WatchdogService : Service() {
     }
 
     private fun createNotification() {
-        val channelId = "DWR_WATCHDOG_CHANNEL"
+        val channelId = "DWR_ANWEB_WATCHDOG"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
-                "حارس الاتصال DWR-921",
+                "حارس اتصال Anweb DWR-921",
                 NotificationManager.IMPORTANCE_LOW
             )
             val manager = getSystemService(NotificationManager::class.java)
@@ -42,8 +42,8 @@ class WatchdogService : Service() {
         }
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("🛡️ حارس اتصال DWR-921 قيد العمل")
-            .setContentText("يراقب الاتصال باستمرار، ويمنع انقطاع النت وتذبذب التردد...")
+            .setContentTitle("🛡️ حارس اتصال DWR-921 قيد التشغيل")
+            .setContentText("يراقب الجلسة باستمرار، وينعش النت تلقائياً عند انقطاعه...")
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setOngoing(true)
             .build()
@@ -56,34 +56,34 @@ class WatchdogService : Service() {
         isRunning = true
 
         serviceScope.launch {
+            // تسجيل الدخول لأول مرة
+            controller.authenticateAnweb()
+
             while (isActive && isRunning) {
-                // منع التنويم وتثبيت التردد
-                controller.pumpActiveChannel()
+                controller.pumpStabilityPulse()
+                val isAlive = controller.isInternetAlive()
 
-                // فحص صحة الإنترنت
-                val alive = controller.isInternetAlive()
-
-                if (!alive) {
+                if (!isAlive) {
                     failCount++
                     if (failCount >= 2) {
-                        broadcastLog("⚠️ انقطع النت فجأة! جاري إنعاش الراوتر وإعادة ربط الشبكة تلقائياً...")
-                        controller.reviveConnection()
-                        delay(6000)
+                        broadcastLog("⚠️ تم رصد انقطاع النت! جاري إعادة إحياء الجلسة فوراً...")
+                        controller.reviveWanSession()
+                        delay(5000)
                         failCount = 0
                     }
                 } else {
                     failCount = 0
                 }
-
                 delay(2000)
             }
         }
     }
 
     private fun broadcastLog(msg: String) {
-        val intent = Intent("DWR_LOG_EVENT")
-        intent.setPackage(packageName)
-        intent.putExtra("LOG_TEXT", msg)
+        val intent = Intent("DWR_LOG_EVENT").apply {
+            setPackage(packageName)
+            putExtra("LOG_TEXT", msg)
+        }
         sendBroadcast(intent)
     }
 
