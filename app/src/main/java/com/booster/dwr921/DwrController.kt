@@ -185,7 +185,7 @@ class DwrController(
                 put("ParameterKey", "reconnect_cycle")
             })
 
-            delay(1200) // انتظار تفريغ الجلسة القديمة
+            delay(1200)
 
             val enableList = JSONArray().apply {
                 put(JSONObject().apply {
@@ -216,7 +216,6 @@ class DwrController(
             }
         } catch (_: Exception) {}
 
-        // تثبيت وتطبيق التغييرات في الذاكرة الحية للراوتر
         callRpc("ApplyChanges", JSONObject())
         callRpc("SaveConfig", JSONObject())
 
