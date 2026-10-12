@@ -3,6 +3,12 @@ package com.booster.dwr921
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.TimeUnit
@@ -13,96 +19,185 @@ class DwrController(
     private val logger: (String) -> Unit
 ) {
 
+    private var accessToken: String? = null
+    private var sessionCookie: String? = null
+
     private val client = OkHttpClient.Builder()
-        .connectTimeout(3, TimeUnit.SECONDS)
-        .readTimeout(3, TimeUnit.SECONDS)
+        .connectTimeout(4, TimeUnit.SECONDS)
+        .readTimeout(4, TimeUnit.SECONDS)
+        .cookieJar(object : CookieJar {
+            private val cookieStore = HashMap<String, List<Cookie>>()
+            override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+                cookieStore[url.host] = cookies
+                cookies.firstOrNull { it.name == "device-session-id" }?.let {
+                    sessionCookie = "${it.name}=${it.value}"
+                }
+            }
+            override fun loadForRequest(url: HttpUrl): List<Cookie> {
+                return cookieStore[url.host] ?: ArrayList()
+            }
+        })
         .build()
 
-    // 1. إجبار المودم على حظر 3G والتشبث بترددات 4G (Band 28 و Band 3)
-    suspend fun force4GLteOnly(): Boolean = withContext(Dispatchers.IO) {
-        logger("[HUNTER] إرسال أوامر حظر 3G والتشبث بـ LTE 4G...")
-        val body = FormBody.Builder()
-            .add("wan_mode", "4G_ONLY")
-            .add("net_mode", "LTE_ONLY")
-            .add("lte_band", "3,28,7")
-            .add("apn", "internet.rl")
-            .build()
-
-        val req = Request.Builder()
-            .url("http://$routerIp/cgi-bin/net_mode.cgi")
-            .post(body)
-            .addHeader("Authorization", Credentials.basic("admin", password))
-            .build()
-
+    // 1. تسجيل الدخول بنظام Anweb الحديث والحصول على DMSD-Access-Token
+    suspend fun authenticateAnweb(): Boolean = withContext(Dispatchers.IO) {
         return@withContext try {
-            val res = client.newCall(req).execute()
-            val ok = res.isSuccessful
-            res.close()
-            fallbackForce4G() || ok
+            logger("[AUTH] جاري الاتصال بنظام Anweb وتهيئة ملفات الجلسة...")
+            
+            // الخطوة أ: طلب الكوكيز الأولي
+            val cookieReq = Request.Builder().url("http://$routerIp/cookies").get().build()
+            client.newCall(cookieReq).execute().close()
+
+            // الخطوة ب: تسجيل الدخول وجلب التوكن
+            val loginJson = JSONObject().apply {
+                put("login", "admin")
+                put("password", password)
+                put("staysigned", true)
+            }
+
+            val mediaType = "application/json; charset=utf-8".toMediaType()
+            val loginReq = Request.Builder()
+                .url("http://$routerIp/login?")
+                .post(loginJson.toString().toRequestBody(mediaType))
+                .build()
+
+            val response = client.newCall(loginReq).execute()
+            val bodyStr = response.body?.string().orEmpty()
+            response.close()
+
+            val json = JSONObject(bodyStr)
+            if (json.has("result")) {
+                val resObj = json.getJSONObject("result")
+                accessToken = resObj.optString("AccessToken")
+                logger("✅ تم تسجيل الدخول بنجاح! التوكن: ${accessToken?.take(8)}***")
+                true
+            } else {
+                logger("❌ فشل تسجيل الدخول: تحقق من كلمة المرور.")
+                false
+            }
         } catch (e: Exception) {
-            fallbackForce4G()
+            logger("⚠️ خطأ في الاتصال بالراوتر: ${e.message}")
+            false
         }
     }
 
-    private fun fallbackForce4G(): Boolean {
-        return try {
-            val body = FormBody.Builder()
-                .add("prefer_mode", "4G")
-                .add("mode", "4G")
+    // 2. إرسال أوامر JSON-RPC 2.0 المباشرة لمنفذ /cpe
+    private suspend fun sendRpc(method: String, params: JSONObject): Boolean = withContext(Dispatchers.IO) {
+        if (accessToken == null) {
+            if (!authenticateAnweb()) return@withContext false
+        }
+
+        return@withContext try {
+            val rpcPayload = JSONObject().apply {
+                put("jsonrpc", "2.0")
+                put("method", method)
+                put("params", params)
+                put("id", 1)
+            }
+
+            val mediaType = "application/json; charset=utf-8".toMediaType()
+            val request = Request.Builder()
+                .url("http://$routerIp/cpe")
+                .post(rpcPayload.toString().toRequestBody(mediaType))
+                .apply {
+                    accessToken?.let { addHeader("DMSD-Access-Token", it) }
+                    sessionCookie?.let { addHeader("Cookie", it) }
+                }
                 .build()
-            val req = Request.Builder()
-                .url("http://$routerIp/goform/formWanSetting")
-                .post(body)
-                .build()
-            val res = client.newCall(req).execute()
-            val ok = res.isSuccessful
+
+            val res = client.newCall(request).execute()
+            val isOk = res.isSuccessful
             res.close()
-            ok
+            isOk
         } catch (e: Exception) {
             false
         }
     }
 
-    // 2. إعادة إحياء جلسة البيانات فور حدوث التجميد (حل مشكلة انقطاع النت التلقائي)
-    suspend fun reviveConnection(): Boolean = withContext(Dispatchers.IO) {
-        logger("[AUTO-HEAL] رصد انقطاع بالنت! جاري إعادة إحياء الجلسة للراوتر فوراً...")
-        val body = FormBody.Builder()
-            .add("action", "reconnect")
-            .add("wan_action", "restart")
-            .build()
-
-        val req = Request.Builder()
-            .url("http://$routerIp/cgi-bin/dconnectivity.cgi")
-            .post(body)
-            .addHeader("Authorization", Credentials.basic("admin", password))
-            .build()
-
-        return@withContext try {
-            val res = client.newCall(req).execute()
-            val ok = res.isSuccessful
-            res.close()
-            ok
-        } catch (e: Exception) {
-            triggerWanFallback()
+    // 3. قفل وصيد 4G LTE وحظر 3G عبر Anweb TR-181
+    suspend fun force4GLte(): Boolean = withContext(Dispatchers.IO) {
+        logger("[HUNTER] إرسال أمر Anweb الداخلي لقفل المودم على 4G LTE...")
+        val params = JSONObject().apply {
+            put("area", "wan")
+            put("data", JSONObject().apply {
+                put("mode", "4G")
+                put("net_mode", "LTE_ONLY")
+                put("prefer_mode", "4G")
+                put("lte_band", "3,28,7")
+            })
+            put("save", true)
         }
+        val ok = sendRpc("write", params)
+        sendRpc("ApplyChanges", JSONObject())
+        return@withContext ok
     }
 
-    private fun triggerWanFallback(): Boolean {
+    // 4. إنعاش فوري لجلسة البيانات عند انقطاع النت (Auto-Heal)
+    suspend fun reviveWanSession(): Boolean = withContext(Dispatchers.IO) {
+        logger("[AUTO-HEAL] إرسال نبضة إنعاش فوري لجلسة الاتصال...")
+        val params = JSONObject().apply {
+            put("area", "wan_action")
+            put("action", "reconnect")
+        }
+        val ok = sendRpc("write", params)
+        if (!ok) {
+            // حل بديل: إعادة تشغيل ناعمة للواجهة
+            sendRpc("ApplyChanges", JSONObject())
+        }
+        return@withContext ok
+    }
+
+    // 5. ضبط وحقن الـ MTU 1380 في الراوتر
+    suspend fun setRouterMtu(mtu: Int = 1380): Boolean = withContext(Dispatchers.IO) {
+        logger("[MTU] جاري حقن MTU = $mtu داخل إعدادات WAN في الراوتر...")
+        val params = JSONObject().apply {
+            put("area", "wan")
+            put("data", JSONObject().apply {
+                put("mtu", mtu)
+                put("wan_mtu", mtu)
+            })
+            put("save", true)
+        }
+        val ok = sendRpc("write", params)
+        sendRpc("ApplyChanges", JSONObject())
+        return@withContext ok
+    }
+
+    // 6. فحص واختيار أسرع خادم DNS (Benchmark)
+    suspend fun benchmarkDnsServers(): Pair<String, Long> = withContext(Dispatchers.IO) {
+        val dnsList = listOf(
+            "Cloudflare (1.1.1.1)" to "1.1.1.1",
+            "Google (8.8.8.8)" to "8.8.8.8",
+            "Quad9 (9.9.9.9)" to "9.9.9.9",
+            "OpenDNS (208.67.222.222)" to "208.67.222.222"
+        )
+        var bestName = "Cloudflare (1.1.1.1)"
+        var lowestPing = 9999L
+
+        for ((name, ip) in dnsList) {
+            val ping = measureDnsLatency(ip)
+            logger("📡 $name: ${if (ping != -1L) "${ping}ms" else "غير متاح"}")
+            if (ping in 1 until lowestPing) {
+                lowestPing = ping
+                bestName = name
+            }
+        }
+        return@withContext Pair(bestName, lowestPing)
+    }
+
+    private fun measureDnsLatency(ip: String): Long {
+        val start = System.currentTimeMillis()
         return try {
-            val req = Request.Builder()
-                .url("http://$routerIp/goform/formWanReconnect")
-                .get()
-                .build()
-            val res = client.newCall(req).execute()
-            val ok = res.isSuccessful
-            res.close()
-            ok
+            val socket = Socket()
+            socket.connect(InetSocketAddress(ip, 53), 1200)
+            socket.close()
+            System.currentTimeMillis() - start
         } catch (e: Exception) {
-            false
+            -1L
         }
     }
 
-    // 3. فحص حي للإنترنت عبر مقابس سريعة
+    // 7. فحص حي للإنترنت
     suspend fun isInternetAlive(): Boolean = withContext(Dispatchers.IO) {
         return@withContext try {
             val socket = Socket()
@@ -110,27 +205,18 @@ class DwrController(
             socket.close()
             true
         } catch (e: Exception) {
-            try {
-                val socket2 = Socket()
-                socket2.connect(InetSocketAddress("8.8.8.8", 53), 1200)
-                socket2.close()
-                true
-            } catch (ex: Exception) {
-                false
-            }
+            false
         }
     }
 
-    // 4. تثبيت تردد 2100MHz ومنع ذبذبته
-    suspend fun pumpActiveChannel(): Boolean = withContext(Dispatchers.IO) {
-        return@withContext try {
-            val s = Socket()
-            s.connect(InetSocketAddress("1.0.0.1", 53), 800)
-            s.getOutputStream().write(byteArrayOf(0x0A, 0x0B))
-            s.close()
-            true
-        } catch (e: Exception) {
-            false
-        }
+    // 8. نبضات الحفاظ على استقرار التردد ومنع الذبذبة
+    suspend fun pumpStabilityPulse() = withContext(Dispatchers.IO) {
+        try {
+            val socket = DatagramSocket()
+            val data = byteArrayOf(0x01, 0x02)
+            val packet = DatagramPacket(data, data.size, InetAddress.getByName("1.1.1.1"), 53)
+            socket.send(packet)
+            socket.close()
+        } catch (_: Exception) {}
     }
 }
