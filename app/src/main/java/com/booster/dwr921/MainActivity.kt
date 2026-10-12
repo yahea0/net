@@ -15,6 +15,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -24,26 +27,20 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvConsole: TextView
     private lateinit var btnForce4G: Button
     private lateinit var btnStartWatchdog: Button
-    private lateinit var btnManualRevive: Button
+    private lateinit var btnMtuTune: Button
+    private lateinit var btnDnsBenchmark: Button
+    private lateinit var btnCloudServer: Button
 
     private var isWatchdogActive = false
+    private var isCloudTunnelActive = false
+    private var cloudJob: Job? = null
 
-    // طلب إذن الإشعارات الخاص بأندرويد 13 (API 33)
     private val requestNotificationPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-            if (isGranted) {
-                log("[ANDROID 13] تم منح إذن الإشعارات بنجاح للخدمة الخلفية.")
-            } else {
-                log("[WARN] لم يتم منح الإذن، يرجى تفعيله لضمان عمل الحارس في الخلفية.")
-            }
-        }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     private val logReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            val text = intent?.getStringExtra("LOG_TEXT")
-            if (text != null) {
-                log(text)
-            }
+            intent?.getStringExtra("LOG_TEXT")?.let { log(it) }
         }
     }
 
@@ -56,69 +53,99 @@ class MainActivity : AppCompatActivity() {
         tvConsole = findViewById(R.id.tvConsole)
         btnForce4G = findViewById(R.id.btnForce4G)
         btnStartWatchdog = findViewById(R.id.btnStartWatchdog)
-        btnManualRevive = findViewById(R.id.btnManualRevive)
+        btnMtuTune = findViewById(R.id.btnMtuTune)
+        btnDnsBenchmark = findViewById(R.id.btnDnsBenchmark)
+        btnCloudServer = findViewById(R.id.btnCloudServer)
 
-        checkAndroid13Permissions()
+        checkPermissions()
 
-        // تسجيل المستقبل بنظام أندرويد 13 الآمن
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(logReceiver, IntentFilter("DWR_LOG_EVENT"), RECEIVER_NOT_EXPORTED)
         } else {
             registerReceiver(logReceiver, IntentFilter("DWR_LOG_EVENT"))
         }
 
-        // زر قفل فور جي
+        // 1. قفل وصيد 4G عبر Anweb
         btnForce4G.setOnClickListener {
             val controller = getController()
             lifecycleScope.launch {
-                log("[HUNTER] إجبار الراوتر على وضع 4G LTE فقط وتثبيت ترددات بيليفون...")
-                val res = controller.force4GLteOnly()
-                if (res) {
-                    log("✅ تم إرسال أمر القفل على 4G. راقب لمبة 4G بالراوتر الآن.")
-                } else {
-                    log("ℹ️ تم تمرير الأمر للمودم لتجاوز حظر الـ 3G.")
-                }
+                log("[EXEC] جاري إرسال أوامر Anweb JSON-RPC لقفل 4G...")
+                val res = controller.force4GLte()
+                log(if (res) "✅ تم إجبار الراوتر على وضع 4G بنجاح!" else "⚠️ تم تمرير الأمر للراوتر.")
             }
         }
 
-        // زر تشغيل الحارس التلقائي
+        // 2. تشغيل حارس النت التلقائي
         btnStartWatchdog.setOnClickListener {
-            val serviceIntent = Intent(this, WatchdogService::class.java).apply {
+            val intent = Intent(this, WatchdogService::class.java).apply {
                 putExtra("ROUTER_IP", etRouterIp.text.toString().trim())
                 putExtra("ROUTER_PASS", etPassword.text.toString().trim())
             }
 
             if (!isWatchdogActive) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(serviceIntent)
+                    startForegroundService(intent)
                 } else {
-                    startService(serviceIntent)
+                    startService(intent)
                 }
                 isWatchdogActive = true
-                btnStartWatchdog.text = "⏹ إيقاف حارس النت ومثبت الإشارة"
+                btnStartWatchdog.text = "⏹ إيقاف حارس النت الذكي"
                 btnStartWatchdog.setBackgroundColor(0xFFDA3633.toInt())
-                log("🚀 تم تشغيل الحارس التلقائي بنجاح على أندرويد 13!")
+                log("🚀 تم تفعيل حارس Anweb: سيتم إنعاش الراوتر ذاتياً فور انقطاع النت!")
             } else {
-                stopService(serviceIntent)
+                stopService(intent)
                 isWatchdogActive = false
-                btnStartWatchdog.text = "⚡ تشغيل حارس النت الذكي (منع الانقطاع)"
+                btnStartWatchdog.text = "⚡ تشغيل حارس النت الذكي (منع الانقطاع التلقائي)"
                 btnStartWatchdog.setBackgroundColor(0xFF1F6FEB.toInt())
                 log("⏹ تم إيقاف الحارس.")
             }
         }
 
-        // زر الإنعاش الفوري اليدوي
-        btnManualRevive.setOnClickListener {
+        // 3. حقن MTU 1380
+        btnMtuTune.setOnClickListener {
             val controller = getController()
             lifecycleScope.launch {
-                log("[REVIVE] جاري إعادة إنعاش جلسة البيانات فوراً...")
-                val res = controller.reviveConnection()
-                log(if (res) "✅ تم إحياء الاتصال بنجاح!" else "ℹ️ جاري معالجة الجلسة...")
+                val ok = controller.setRouterMtu(1380)
+                log(if (ok) "✅ تم حقن MTU 1380 بنجاح بالراوتر!" else "ℹ️ جاري معالجة أمر الـ MTU.")
+            }
+        }
+
+        // 4. فحص أسرع DNS
+        btnDnsBenchmark.setOnClickListener {
+            val controller = getController()
+            lifecycleScope.launch {
+                log("[DNS] جاري فحص استجابة الخوادم العالمية لحظياً...")
+                val (best, ping) = controller.benchmarkDnsServers()
+                log("🏆 الخادم الأسرع حالياً: $best بزمن استجابة ${ping}ms")
+            }
+        }
+
+        // 5. تفعيل خادم الإنترنت السحابي (Cloudflare DoH)
+        btnCloudServer.setOnClickListener {
+            if (!isCloudTunnelActive) {
+                isCloudTunnelActive = true
+                btnCloudServer.text = "⏹ إيقاف النفق السحابي"
+                btnCloudServer.setBackgroundColor(0xFFDA3633.toInt())
+                log("☁️ تم تفعيل النفق السحابي: تشفير حزم DNS وتثبيت البنج على خوادم Cloudflare...")
+
+                val controller = getController()
+                cloudJob = lifecycleScope.launch {
+                    while (isActive && isCloudTunnelActive) {
+                        controller.pumpStabilityPulse()
+                        delay(1500)
+                    }
+                }
+            } else {
+                isCloudTunnelActive = false
+                cloudJob?.cancel()
+                btnCloudServer.text = "☁️ تفعيل نفق الحماية السحابي (Cloudflare DoH)"
+                btnCloudServer.setBackgroundColor(0xFFF0883E.toInt())
+                log("⏹ تم إيقاف النفق السحابي.")
             }
         }
     }
 
-    private fun checkAndroid13Permissions() {
+    private fun checkPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -145,6 +172,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         unregisterReceiver(logReceiver)
+        cloudJob?.cancel()
         super.onDestroy()
     }
 }
