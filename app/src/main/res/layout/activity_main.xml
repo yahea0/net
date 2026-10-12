@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_main"
+    android:background="#0D1117"
     android:fillViewport="true">
 
     <LinearLayout
@@ -12,14 +12,14 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- بطاقة الحالة والترويسة العصرية -->
+        <!-- بطاقة الترويسة الأنيقة والحالة المباشرة -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardBackgroundColor="@color/card_bg"
+            app:cardBackgroundColor="#161B22"
             app:cardCornerRadius="16dp"
             app:cardElevation="6dp"
-            app:strokeColor="@color/card_stroke"
+            app:strokeColor="#30363D"
             app:strokeWidth="1dp">
 
             <LinearLayout
@@ -39,21 +39,20 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="⚡ DWR-921 Turbo Master"
-                        android:textColor="@color/text_white"
+                        android:textColor="#F0F6FC"
                         android:textSize="18sp"
                         android:textStyle="bold" />
 
-                    <!-- شارة البنج المباشرة -->
+                    <!-- شارة البنج الحي -->
                     <TextView
                         android:id="@+id/tvLivePingBadge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:background="@drawable/ic_launcher"
-                        android:backgroundTint="#21262D"
+                        android:background="#21262D"
                         android:paddingHorizontal="10dp"
                         android:paddingVertical="4dp"
                         android:text="البنج: -- ms"
-                        android:textColor="@color/console_text"
+                        android:textColor="#39D353"
                         android:textSize="12sp"
                         android:textStyle="bold" />
                 </LinearLayout>
@@ -63,10 +62,10 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:text="شريحة رامي ليفي • وضع 3G HSPA+ فائق الاستقرار"
-                    android:textColor="@color/text_muted"
+                    android:textColor="#8B949E"
                     android:textSize="12sp" />
 
-                <!-- حقول الاتصال بالراوتر بتصميم انسيابي -->
+                <!-- حقول تسجيل الدخول للراوتر -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -79,12 +78,12 @@
                         android:layout_height="46dp"
                         android:layout_marginEnd="6dp"
                         android:layout_weight="1.3"
-                        android:background="@color/input_bg"
+                        android:background="#21262D"
                         android:hint="IP الراوتر"
                         android:paddingHorizontal="12dp"
                         android:text="192.168.0.1"
-                        android:textColor="@color/text_white"
-                        android:textColorHint="@color/text_muted"
+                        android:textColor="#F0F6FC"
+                        android:textColorHint="#8B949E"
                         android:textSize="13sp" />
 
                     <EditText
@@ -93,27 +92,27 @@
                         android:layout_height="46dp"
                         android:layout_marginStart="6dp"
                         android:layout_weight="1"
-                        android:background="@color/input_bg"
+                        android:background="#21262D"
                         android:hint="كلمة السر"
                         android:inputType="textPassword"
                         android:paddingHorizontal="12dp"
                         android:text="admin"
-                        android:textColor="@color/text_white"
-                        android:textColorHint="@color/text_muted"
+                        android:textColor="#F0F6FC"
+                        android:textColorHint="#8B949E"
                         android:textSize="13sp" />
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- بطاقة العمليات الرئيسية (RECONNECT والحارس) -->
+        <!-- بطاقة التحكم المباشر بالاتصال وإعادة التشغيل -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            app:cardBackgroundColor="@color/card_bg"
+            app:cardBackgroundColor="#161B22"
             app:cardCornerRadius="16dp"
             app:cardElevation="6dp"
-            app:strokeColor="@color/card_stroke"
+            app:strokeColor="#30363D"
             app:strokeWidth="1dp">
 
             <LinearLayout
@@ -125,12 +124,12 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="🚀 التحكم المباشر بالشبكة"
+                    android:text="🚀 عمليات الاتصال السريع"
                     android:textColor="#58A6FF"
                     android:textSize="15sp"
                     android:textStyle="bold" />
 
-                <!-- زر الإنعاش الفوري المحاكي لزر RECONNECT في الراوتر -->
+                <!-- زر الإنعاش الفوري المحاكي لزر RECONNECT في صفحة الراوتر -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnReconnectWan"
                     android:layout_width="match_parent"
@@ -140,23 +139,22 @@
                     android:textColor="#FFFFFF"
                     android:textSize="14sp"
                     android:textStyle="bold"
-                    app:backgroundTint="@color/green_accent"
-                    app:cornerRadius="10dp"
-                    app:elevation="4dp" />
+                    app:backgroundTint="#238636"
+                    app:cornerRadius="10dp" />
 
-                <!-- زر حارس النت الذكي لمنع التقطيع -->
+                <!-- زر الحارس التلقائي لمنع انقطاع النت في الخلفية -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnStartWatchdog"
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
                     android:layout_marginTop="8dp"
-                    android:text="🛡️ تشغيل حارس رامي ليفي (منع الانقطاع التلقائي)"
+                    android:text="🛡️ تشغيل حارس رامي ليفي (منع التقطيع التلقائي)"
                     android:textColor="#FFFFFF"
                     android:textSize="13sp"
-                    app:backgroundTint="@color/blue_accent"
+                    app:backgroundTint="#1F6FEB"
                     app:cornerRadius="10dp" />
 
-                <!-- زر حقن MTU 1380 و DNS -->
+                <!-- زر حقن MTU 1380 و DNS Cloudflare -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnApplyDnsMtu"
                     android:layout_width="match_parent"
@@ -165,20 +163,20 @@
                     android:text="⚙️ حقن MTU 1380 + أسرع DNS في الراوتر"
                     android:textColor="#FFFFFF"
                     android:textSize="13sp"
-                    app:backgroundTint="@color/purple_accent"
+                    app:backgroundTint="#8957E5"
                     app:cornerRadius="10dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- بطاقة إدارة التردد المخصصة لـ 3G HSPA+ -->
+        <!-- بطاقة إدارة التردد المخصصة لشبكة 3G HSPA+ -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            app:cardBackgroundColor="@color/card_bg"
+            app:cardBackgroundColor="#161B22"
             app:cardCornerRadius="16dp"
             app:cardElevation="6dp"
-            app:strokeColor="@color/card_stroke"
+            app:strokeColor="#30363D"
             app:strokeWidth="1dp">
 
             <LinearLayout
@@ -191,7 +189,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="📶 إدارة التردد ونمط الشبكة (منطقتك: 3G)"
-                    android:textColor="#F2CC60"
+                    android:textColor="#D29922"
                     android:textSize="15sp"
                     android:textStyle="bold" />
 
@@ -201,7 +199,7 @@
                     android:layout_marginTop="10dp"
                     android:orientation="horizontal">
 
-                    <!-- زر قفل 3G فقط لمنع تشتت الراوتر -->
+                    <!-- زر تثبيت 3G فقط لمنع تشتت الراوتر نحو 4G غير موجود -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnForce3G"
                         android:layout_width="0dp"
@@ -257,13 +255,13 @@
                         android:text="☁️ تثبيت البرج"
                         android:textColor="#FFFFFF"
                         android:textSize="12sp"
-                        app:backgroundTint="@color/amber_accent"
+                        app:backgroundTint="#D29922"
                         app:cornerRadius="8dp" />
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- نافذة السجل الحي الأنيقة (Console) -->
+        <!-- نافذة السجل الحي والمراقبة (Console) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -276,7 +274,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="🖥️ سجل الأداء والعمليات المباشر:"
-                android:textColor="@color/text_muted"
+                android:textColor="#8B949E"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -297,12 +295,12 @@
             android:layout_width="match_parent"
             android:layout_height="190dp"
             android:layout_marginTop="6dp"
-            android:background="@color/console_bg"
+            android:background="#010409"
             android:fontFamily="monospace"
             android:lineSpacingExtra="3dp"
             android:padding="12dp"
             android:scrollbars="vertical"
-            android:textColor="@color/console_text"
+            android:textColor="#39D353"
             android:textSize="11sp" />
 
     </LinearLayout>
