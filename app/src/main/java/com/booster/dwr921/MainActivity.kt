@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.text.method.ScrollingMovementMethod
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -25,15 +26,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etRouterIp: EditText
     private lateinit var etPassword: EditText
     private lateinit var tvConsole: TextView
-    private lateinit var btnForce4G: Button
+    private lateinit var btnReconnectWan: Button
     private lateinit var btnStartWatchdog: Button
-    private lateinit var btnMtuTune: Button
+    private lateinit var btnApplyDnsMtu: Button
+    private lateinit var btnForce4G: Button
     private lateinit var btnDnsBenchmark: Button
     private lateinit var btnCloudServer: Button
 
     private var isWatchdogActive = false
-    private var isCloudTunnelActive = false
-    private var cloudJob: Job? = null
+    private var isCloudPulseActive = false
+    private var cloudPulseJob: Job? = null
 
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
@@ -51,11 +53,14 @@ class MainActivity : AppCompatActivity() {
         etRouterIp = findViewById(R.id.etRouterIp)
         etPassword = findViewById(R.id.etPassword)
         tvConsole = findViewById(R.id.tvConsole)
-        btnForce4G = findViewById(R.id.btnForce4G)
+        btnReconnectWan = findViewById(R.id.btnReconnectWan)
         btnStartWatchdog = findViewById(R.id.btnStartWatchdog)
-        btnMtuTune = findViewById(R.id.btnMtuTune)
+        btnApplyDnsMtu = findViewById(R.id.btnApplyDnsMtu)
+        btnForce4G = findViewById(R.id.btnForce4G)
         btnDnsBenchmark = findViewById(R.id.btnDnsBenchmark)
         btnCloudServer = findViewById(R.id.btnCloudServer)
+
+        tvConsole.movementMethod = ScrollingMovementMethod()
 
         checkPermissions()
 
@@ -65,17 +70,25 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(logReceiver, IntentFilter("DWR_LOG_EVENT"))
         }
 
-        // 1. قفل وصيد 4G عبر Anweb
-        btnForce4G.setOnClickListener {
+        log("🚀 مرحباً بك! التطبيق جاهز لإدارة راوتر DWR-921 وشريحة رامي ليفي.")
+
+        // 1. إعادة تشغيل الشبكة فوراً (المحاكي الدقيق لزر RECONNECT في الصورة)
+        btnReconnectWan.setOnClickListener {
             val controller = getController()
             lifecycleScope.launch {
-                log("[EXEC] جاري إرسال أوامر Anweb JSON-RPC لقفل 4G...")
-                val res = controller.force4GLte()
-                log(if (res) "✅ تم إجبار الراوتر على وضع 4G بنجاح!" else "⚠️ تم تمرير الأمر للراوتر.")
+                log("[USER] تم طلب إعادة إنعاش الشبكة (RECONNECT) فوراً...")
+                btnReconnectWan.isEnabled = false
+                val ok = controller.reviveWanSession()
+                if (ok) {
+                    log("✅ نجح إرسال أوامر الإنعاش! ننتظر استلام IP جديد من رامي ليفي...")
+                } else {
+                    log("⚠️ جاري متابعة استجابة المودم...")
+                }
+                btnReconnectWan.isEnabled = true
             }
         }
 
-        // 2. تشغيل حارس النت التلقائي
+        // 2. تشغيل / إيقاف الحارس الذكي في الخلفية لمنع التقطيع
         btnStartWatchdog.setOnClickListener {
             val intent = Intent(this, WatchdogService::class.java).apply {
                 putExtra("ROUTER_IP", etRouterIp.text.toString().trim())
@@ -91,56 +104,82 @@ class MainActivity : AppCompatActivity() {
                 isWatchdogActive = true
                 btnStartWatchdog.text = "⏹ إيقاف حارس النت الذكي"
                 btnStartWatchdog.setBackgroundColor(0xFFDA3633.toInt())
-                log("🚀 تم تفعيل حارس Anweb: سيتم إنعاش الراوتر ذاتياً فور انقطاع النت!")
+                log("🛡️ تم تفعيل الحارس: يراقب الإنترنت ويعيد تشغيل اتصال رامي ليفي تلقائياً عند انقطاعه!")
             } else {
                 stopService(intent)
                 isWatchdogActive = false
-                btnStartWatchdog.text = "⚡ تشغيل حارس النت الذكي (منع الانقطاع التلقائي)"
+                btnStartWatchdog.text = "🛡️ تشغيل حارس النت الذكي (منع التقطيع)"
                 btnStartWatchdog.setBackgroundColor(0xFF1F6FEB.toInt())
                 log("⏹ تم إيقاف الحارس.")
             }
         }
 
-        // 3. حقن MTU 1380
-        btnMtuTune.setOnClickListener {
+        // 3. حقن MTU 1380 + أسرع DNS في الراوتر
+        btnApplyDnsMtu.setOnClickListener {
             val controller = getController()
             lifecycleScope.launch {
-                val ok = controller.setRouterMtu(1380)
-                log(if (ok) "✅ تم حقن MTU 1380 بنجاح بالراوتر!" else "ℹ️ جاري معالجة أمر الـ MTU.")
+                btnApplyDnsMtu.isEnabled = false
+                log("[TUNING] فحص الخوادم واختيار الأفضل قبل الحقن...")
+                val (bestDnsName, ping) = controller.benchmarkDnsServers()
+                log("🏆 الخادم الأسرع: $bestDnsName (${ping}ms)")
+
+                val ok = controller.configureOptimalNetworkSettings(
+                    mtu = 1380,
+                    primaryDns = "1.1.1.1",
+                    secondaryDns = "1.0.0.1"
+                )
+                if (ok) {
+                    log("🎉 تم ضبط MTU = 1380 والـ DNS في الراوتر وخادم الـ DHCP الداخلي بنجاح!")
+                }
+                btnApplyDnsMtu.isEnabled = true
             }
         }
 
-        // 4. فحص أسرع DNS
+        // 4. قفل الراوتر على 4G LTE فقط
+        btnForce4G.setOnClickListener {
+            val controller = getController()
+            lifecycleScope.launch {
+                log("[MODEM] قفل الراوتر على 4G LTE...")
+                val res = controller.force4GLte()
+                log(if (res) "✅ تم إجبار الراوتر على وضع 4G بنجاح!" else "ℹ️ تم تمرير أمر القفل للراوتر.")
+            }
+        }
+
+        // 5. قياس البنج المباشر
         btnDnsBenchmark.setOnClickListener {
             val controller = getController()
             lifecycleScope.launch {
-                log("[DNS] جاري فحص استجابة الخوادم العالمية لحظياً...")
-                val (best, ping) = controller.benchmarkDnsServers()
-                log("🏆 الخادم الأسرع حالياً: $best بزمن استجابة ${ping}ms")
+                log("[PING] جاري قياس سرعة الاستجابة اللحظية...")
+                val ping = controller.measureInternetPing()
+                if (ping != -1L) {
+                    log("📶 البنج المباشر للإنترنت: ${ping}ms")
+                } else {
+                    log("❌ النت غير مستجيب حالياً (انقطاع في الاتصال).")
+                }
             }
         }
 
-        // 5. تفعيل خادم الإنترنت السحابي (Cloudflare DoH)
+        // 6. نبضات تثبيت الاتصال (Heartbeat) لمنع خمول برج رامي ليفي
         btnCloudServer.setOnClickListener {
-            if (!isCloudTunnelActive) {
-                isCloudTunnelActive = true
-                btnCloudServer.text = "⏹ إيقاف النفق السحابي"
+            if (!isCloudPulseActive) {
+                isCloudPulseActive = true
+                btnCloudServer.text = "⏹ إيقاف نبضات التثبيت"
                 btnCloudServer.setBackgroundColor(0xFFDA3633.toInt())
-                log("☁️ تم تفعيل النفق السحابي: تشفير حزم DNS وتثبيت البنج على خوادم Cloudflare...")
+                log("☁️ تم بدء إرسال نبضات التثبيت (Keep-Alive): منع البرج من فصل الجلسة...")
 
                 val controller = getController()
-                cloudJob = lifecycleScope.launch {
-                    while (isActive && isCloudTunnelActive) {
+                cloudPulseJob = lifecycleScope.launch {
+                    while (isActive && isCloudPulseActive) {
                         controller.pumpStabilityPulse()
-                        delay(1500)
+                        delay(2500)
                     }
                 }
             } else {
-                isCloudTunnelActive = false
-                cloudJob?.cancel()
-                btnCloudServer.text = "☁️ تفعيل نفق الحماية السحابي (Cloudflare DoH)"
-                btnCloudServer.setBackgroundColor(0xFFF0883E.toInt())
-                log("⏹ تم إيقاف النفق السحابي.")
+                isCloudPulseActive = false
+                cloudPulseJob?.cancel()
+                btnCloudServer.text = "☁️ نبضات تثبيت الاتصال (Cloud Heartbeat)"
+                btnCloudServer.setBackgroundColor(0xFFD29922.toInt())
+                log("⏹ تم إيقاف نبضات التثبيت.")
             }
         }
     }
@@ -172,7 +211,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         unregisterReceiver(logReceiver)
-        cloudJob?.cancel()
+        cloudPulseJob?.cancel()
         super.onDestroy()
     }
 }
